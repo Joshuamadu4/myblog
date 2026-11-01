@@ -1,0 +1,123 @@
+---
+title: "Best Hosting for Next.js"
+description: "Where should you deploy Next.js in 2026? Vercel, Netlify, Cloudflare, and self-hosted options compared for App Router apps."
+category: devops
+date: "2026-08-23"
+keywords: ["best hosting for next.js","vercel","cloudflare (workers/pages)","netlify","self-hosted (docker/vps)"]
+---
+
+## Introduction
+
+Next.js runs almost anywhere, but the platform you pick decides how much of its power (ISR, streaming, image optimisation, middleware) you get for free versus configure by hand.
+
+What follows is a plain look at the main options, what sets them apart, and where each one fits.
+
+The reason this choice matters more for Next.js than for a plain static site is that modern Next is a framework of server features. Incremental Static Regeneration, React Server Components, streaming, the image optimiser, and middleware all expect a runtime that understands them. On the platform built for Next, every one of those works out of the box. On a platform that only partially understands Next, you spend your time discovering which features degrade gracefully and which quietly stop working. So the real question is not "where can I host Next?", because the answer is "almost anywhere". It is "how much of Next's power survives the move, and what does it cost me to keep it."
+
+![A developer workstation with code on screen, representing deploying a Next.js application to the cloud](https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80)
+
+<AffDisclosure />
+
+## How we compared
+
+We looked past the marketing to how each platform behaves with a real App Router app that uses server components, ISR, and the image optimiser:
+
+- **Feature fidelity.** Does Next's full feature set work, or only a subset?
+- **Zero-config distance:** how much config stands between `git push` and production.
+- **Cost model.** Flat and predictable, or metered on bandwidth and function usage.
+- **Control and portability.** How locked in you are, and how hard it is to leave.
+
+## What to look for
+
+Before comparing names, get clear on your own priorities. The factors that matter most here:
+
+- **Fit for your stack.** The best tool is the one that matches how you already work.
+- **Pricing and value.** Weigh the real cost against the time it saves you.
+- **Developer experience:** good docs and a clean API compound every single day.
+- **Scalability.** Will it still fit when your project (or team) grows?
+
+A useful filter: is your app mostly static content with light interactivity, or a server-heavy application with lots of dynamic rendering and data fetching? The former is comfortable almost anywhere, including the edge-first and self-hosted options. The latter benefits most from a platform that handles Next's server runtime natively, because that is where the configuration pain concentrates.
+
+## The top picks
+
+### Vercel
+
+Built by the Next.js team, so every feature works with zero config, plus preview deploys and edge. The default choice.
+
+Vercel is the reference implementation of "deploying Next should be invisible." Because the same company builds both the framework and the platform, features ship to Vercel first and work without configuration: ISR, server components, streaming, `next/image`, and middleware all just run. Preview deployments on every pull request are the feature teams miss most when they leave, letting stakeholders review the real app at a real URL. The trade-off is the usage-based bill. Bandwidth and function execution are metered, so a media-heavy or very high-traffic app can cost meaningfully more than a flat box, and you accept a degree of platform lock-in around Vercel-specific features. For most teams the time saved justifies the premium; for a few, the bill eventually motivates a move.
+
+<AffBox id="vercel" />
+
+### Cloudflare (Workers/Pages)
+
+Global edge network and generous free tier; great for mostly-static or edge-first apps.
+
+Cloudflare runs your code across one of the largest edge networks in existence, with a famously generous free tier and low, predictable pricing beyond it. For apps that are mostly static or genuinely edge-first, meaning lightweight dynamic logic, a global audience, and minimal heavy server computation, it is fast and cheap in a way that is hard to match. The catch is the runtime: Workers is not plain Node.js, so some Next features and Node-specific libraries need adapters or simply do not fit the edge model. It has improved a lot, but you should validate your specific feature usage rather than assume parity. Pick it when the edge is the point, not as a drop-in Vercel replacement for a server-heavy app.
+
+<AffBox id="cloudflare" />
+
+### Netlify
+
+Solid DX and a mature platform with good Next.js support.
+
+Netlify is the seasoned alternative. Its developer experience is polished, its platform is mature, and its Next.js support, delivered through its build plugins and runtime, covers the features most apps actually use. For teams who like Netlify's broader ecosystem of build tooling, forms, and edge functions, or who already host other sites there, keeping Next.js on Netlify is a reasonable and well-trodden path. It tends to trail Vercel slightly on day-one support for the very newest Next features, simply because Vercel ships them first, but the gap is usually short-lived.
+
+### Self-hosted (Docker/VPS)
+
+Full control and flat cost, where you configure caching, ISR, and images yourself.
+
+Running Next yourself with `next start` inside a Docker container on a VPS gives you the thing the managed platforms cannot: a flat, predictable bill and complete control over the runtime and data residency. Everything works, because it is just Node running the official server, but "works" now includes responsibilities the platforms handled for you. You configure a CDN in front for global performance, you decide where ISR's cache lives (and how it behaves across multiple instances), and you make sure the image optimiser has the CPU and caching it needs so it does not become a bottleneck. For a cost-sensitive, high-traffic app with an ops-comfortable team, the savings are real; for a small team optimising for velocity, it is effort better spent elsewhere.
+
+![JavaScript code on a monitor, representing a Next.js app build and deployment](https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1200&q=80)
+
+## Pricing at a glance
+
+| Platform | Cost model | Best when |
+| --- | --- | --- |
+| **Vercel** | Usage-metered (bandwidth + functions) | Velocity matters more than bill |
+| **Cloudflare** | Generous free tier, low flat pricing | Edge-first, mostly static |
+| **Netlify** | Tiered plans + usage | You like the wider Netlify ecosystem |
+| **Self-hosted** | Flat VPS price | High traffic, ops-comfortable team |
+
+## Quick comparison
+
+| Pick | Why it stands out |
+| --- | --- |
+| **Vercel** | Built by the Next. |
+| **Cloudflare (Workers/Pages)** | Global edge network and generous free tier; great for mostly-static or edge-first apps. |
+| **Netlify** | Solid DX and a mature platform with good Next. |
+| **Self-hosted (Docker/VPS)** | Full control and flat cost, where you configure caching, ISR, and images yourself. |
+
+## Performance notes
+
+On Vercel and Cloudflare, global performance is largely automatic: cached pages and assets are served from an edge close to the user, and it shows in Core Web Vitals without effort. Self-hosting serves from wherever your box lives, so a single VPS is fast for its region and slower everywhere else until you put a CDN in front; this is entirely doable but it is work you must remember to do. Pay particular attention to the image optimiser: on managed platforms it is handled, but a self-hosted `next/image` route will chew CPU and should be backed by a cache or an external image service so it does not degrade under load.
+
+## Common mistakes
+
+The most common mistake is assuming every platform gives you Next's full feature set. Always verify ISR, image optimisation, and middleware behave the way you expect on your chosen host before committing. The second is self-hosting without a plan for ISR across multiple instances: run more than one container without shared cache state and you get inconsistent pages. The third is ignoring Vercel's bandwidth meter on a media-heavy app until the invoice forces a panicked migration, so watch it early and front heavy assets with a CDN or object storage.
+
+## Migration tips
+
+Next.js is reassuringly portable because `next build` plus `next start` runs the same everywhere. The friction in a migration is never the app code; it is re-creating the platform conveniences you were leaning on: the CDN, the ISR cache backend, the image pipeline, and environment variables. Containerise early so your app runs identically in local, CI, and production, and keep platform-specific features behind thin abstractions so swapping hosts touches configuration rather than application logic. Cut over behind DNS so you can roll back in minutes if something behaves differently under real traffic.
+
+## Frequently asked questions
+
+**Which should I choose if I'm just starting out?**
+Start with the option that has the gentlest learning curve and best documentation. You can always switch once you understand your needs better.
+
+**Is the most popular option always the best?**
+No. Popularity means more tutorials and community help, but the *right* choice depends on your specific stack, budget, and goals.
+
+**Can I self-host Next.js without losing features?**
+Yes. `next start` supports the full feature set because it is the official Node server. What you take on is the supporting cast: a CDN for global speed, a shared cache backend for ISR across instances, and enough CPU and caching for the image optimiser.
+
+**Is Cloudflare a drop-in replacement for Vercel?**
+Not quite. For edge-first and mostly-static apps it is excellent and often cheaper, but the Workers runtime is not plain Node, so validate your Node-specific dependencies and Next features before you commit a server-heavy app to it.
+
+## Final verdict
+
+For the smoothest experience deploy Next.js on Vercel; self-host on a VPS when cost predictability or data residency matters more than convenience.
+
+Default to Vercel if velocity and zero-config feature fidelity are what you value, and it is the reference platform for a reason. Choose Cloudflare when your app is edge-first and cost-sensitive, Netlify when you are already invested in its ecosystem, and self-hosting when a predictable flat bill or control over your data outweighs the ops you take on. Match the host to the shape of your app, and revisit the decision as it grows.
+
+*I keep this guide current as the platforms evolve. Have a suggestion? [Get in touch](/contact).*

@@ -1,0 +1,128 @@
+---
+title: "GitHub Actions CI/CD Tutorial"
+description: "A practical GitHub Actions tutorial: build, test, and deploy your app automatically with a clean CI/CD pipeline."
+category: devops
+date: "2026-09-06"
+keywords: ["github actions ci/cd tutorial"]
+---
+
+## Introduction
+
+GitHub Actions turns every push into an automated build-test-deploy pipeline, all defined in a single YAML file that lives in your repo right next to the code it governs. There is no separate CI server to provision, no plugin ecosystem to babysit, and no credentials sitting on a box somewhere outside version control. You describe what should happen on which events, GitHub spins up a fresh virtual machine to run it, and you get a green check or a red X on every commit and pull request.
+
+That tight loop is the whole point. A good pipeline is a safety net that catches the broken build, the failing test, and the forgotten lint error before a human ever reviews the code, then ships the change the moment it is safe to. In this tutorial we build one from scratch, starting with build-and-test on every pull request and finishing with a gated deploy on `main`. By the end you'll have a working setup you can drop straight into a real project, plus the context to understand *why* each piece is there.
+
+![Automated CI/CD pipeline workflow visualized as connected stages](https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&w=1200&q=80)
+
+## How GitHub Actions is structured
+
+Three nouns carry the whole model, and it helps to name them before writing YAML. A **workflow** is the file; it is triggered by **events** (a push, a pull request, a schedule). Each workflow contains one or more **jobs**, which run on separate fresh runners and in parallel by default. Each job is an ordered list of **steps**, and a step either runs a shell command (`run`) or invokes a reusable **action** (`uses`). Keep that hierarchy in mind (workflow → job → step) and the file below reads naturally.
+
+## Step 1: Create the workflow file
+
+Actions live in `.github/workflows/`. Create `ci.yml` there to define your pipeline. The directory name is not optional: GitHub only discovers workflows in that exact path.
+
+```yaml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+```
+
+The `on` block is your trigger. Here we run on direct pushes to `main` and on *every* pull request regardless of its target branch. Listing `pull_request` without filters is deliberate: you want the safety net to fire on contributions from every branch and fork. A common refinement is to also add `workflow_dispatch:` so you can trigger the pipeline manually from the Actions tab when you need to.
+
+## Step 2: Set up the job and Node
+
+Each job runs on a fresh runner, a clean virtual machine with nothing of yours on it. So the first thing any job must do is check out your code and install the runtime it needs.
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+```
+
+`actions/checkout@v4` pulls your repository onto the runner; without it the working directory is empty. `actions/setup-node@v4` installs Node 22 and, crucially, the `cache: npm` line restores your npm cache between runs. That one line often cuts a minute or more off every build because dependencies come from cache instead of a cold download. Pin actions to a major version (`@v4`) so you get security patches without surprise breaking changes. Note too that the runner's Ubuntu image already ships with Git, Node, Docker, and most common tooling preinstalled.
+
+## Step 3: Install, test, and build
+
+Run your scripts. If any step exits non-zero, the job stops there, the pipeline goes red, and the merge is blocked (once you enable branch protection, more on that below).
+
+```bash
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+```
+
+Use `npm ci`, not `npm install`, in CI. `npm ci` installs exactly what is in your `package-lock.json`, fails if the lockfile and `package.json` disagree, and is faster because it skips dependency resolution. That reproducibility is the entire reason CI exists: you want the runner to install the same tree every single time. The order matters too: install, then test, then build, so a failing test stops you before you waste time building an artifact you are going to throw away.
+
+## Step 4: Deploy on success
+
+Gate deployment on the main branch so only reviewed, merged code ships. Pull requests will run everything above but must *not* deploy.
+
+```bash
+      - name: Deploy
+        if: github.ref == 'refs/heads/main'
+        run: npm run deploy
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+The `if: github.ref == 'refs/heads/main'` condition is the gate: the step is skipped on pull requests and only runs when the triggering ref is `main`. Secrets come from the repository's **Settings → Secrets and variables → Actions**, and are injected as environment variables through the `secrets` context. They are masked in logs automatically, so even an accidental `echo` will not leak the token. Never, ever paste a token directly into the YAML; the file is in your repo history forever.
+
+![Developer inspecting deployment logs and a green build status on screen](https://images.unsplash.com/photo-1587620962725-abab7fe55159?auto=format&fit=crop&w=1200&q=80)
+
+## The complete workflow
+
+Here is everything assembled into one file you can commit as-is:
+
+```yaml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Deploy
+        if: github.ref == 'refs/heads/main'
+        run: npm run deploy
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+## Making the pipeline actually enforce quality
+
+A green check is only advisory until you turn it into a rule. Go to **Settings → Branches**, add a protection rule for `main`, and require the `build` status check to pass before merging. Now a failing test genuinely blocks the merge button instead of politely suggesting you look at it. Pair that with requiring at least one review, and your pipeline becomes a real gate rather than decoration.
+
+## Common gotchas
+
+- **Caching the wrong thing.** `setup-node`'s `cache: npm` caches the download, not your `node_modules`. You still run `npm ci` every time, and that is expected and correct.
+- **Forgetting the deploy gate.** Without the `if:` condition, a PR from a fork could trigger a production deploy. Always scope deploys to `main`.
+- **Long-running or flaky jobs with no timeout.** Add `timeout-minutes:` to your job so a hung process does not burn your Actions minutes for six hours.
+- **Secrets not available to forked PRs.** For security, secrets are *not* exposed to workflows triggered by pull requests from forks. Your build and test steps should not depend on them; only the deploy step (which runs on `main`) should.
+- **Assuming jobs share state.** Separate jobs run on separate machines. If a later job needs a build artifact, upload it with `actions/upload-artifact` and download it in the next job.
+
+## Wrapping up
+
+Start with build + test on every PR, then add deployment on main. Store secrets in the repo settings, never in the YAML, and turn on branch protection so the checks are enforced rather than ignored. From this foundation you can grow in any direction: a matrix build across multiple Node versions, parallel lint and test jobs, scheduled nightly runs, or reusable workflows shared across repos. The core loop of "every change is built, tested, and only then shipped" is what earns its keep from day one.
+
+If you found this useful, [subscribe](/#subscribe) for more hands-on guides, or [reach out](/contact) with questions.

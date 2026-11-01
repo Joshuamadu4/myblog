@@ -1,0 +1,104 @@
+---
+title: "Docker for Node.js Developers"
+description: "Learn Docker for Node.js from scratch: write a lean production Dockerfile, use multi-stage builds, and run your app in a container."
+category: devops
+date: "2026-09-07"
+keywords: ["docker for node.js developers"]
+---
+
+## Introduction
+
+Docker packages your Node.js app with everything it needs (the runtime, the dependencies, the exact file layout) so it runs the same on your laptop, in CI, and in production. It is the end of "works on my machine": the image you test is bit-for-bit the image that ships. For a Node developer that matters more than most, because the gap between a teammate's Node 20 and a server's Node 18, or a missing native build tool, is exactly the kind of thing that breaks a deploy at the worst possible time.
+
+The goal of this tutorial is a clean, production-ready setup with no fluff. We'll start with a minimal Dockerfile, shrink it dramatically with a multi-stage build, keep the build context lean with a `.dockerignore`, and finish by building and running the container with your environment wired in. Along the way I'll flag the gotchas that bite people in real deployments: layer caching, secrets, image size, and running as a non-root user. By the end you'll have a setup you can drop straight into a real project.
+
+![Shipping containers stacked at a port, a metaphor for Docker images](https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80)
+
+## A quick mental model
+
+An **image** is a read-only template built from your `Dockerfile`; a **container** is a running instance of that image. The Dockerfile is a sequence of instructions, and each instruction creates a cached **layer**. Docker reuses a layer if nothing it depends on has changed, and this single fact drives almost every optimization below. Order your instructions from least-likely-to-change (the base image, dependencies) to most-likely-to-change (your source code), and Docker will skip the expensive steps on most rebuilds.
+
+## Step 1: A minimal Dockerfile
+
+Start from a slim Node base, copy your manifests, and install only what you need.
+
+```dockerfile
+FROM node:22-slim AS base
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+CMD ["node", "server.js"]
+```
+
+The important move here is copying `package*.json` *before* copying the rest of the source. Because Docker caches layers, this means `npm ci` only re-runs when your dependencies actually change, not every time you edit a line of application code. If you copied everything first, every source edit would invalidate the cache and force a full reinstall, turning a two-second rebuild into a two-minute one. `--omit=dev` skips devDependencies so test frameworks and build tools never make it into the running image. The `node:22-slim` base is a good default: a Debian-slim image far smaller than the full `node:22` while still having enough OS libraries that most packages' native modules compile cleanly (the even-smaller `alpine` variant uses musl libc, which occasionally breaks native dependencies, so reach for it only when you've confirmed yours work).
+
+## Step 2: Multi-stage for smaller images
+
+Build in one stage, ship only the result in a lean final stage. This is the single biggest win for image size when you have a build step (TypeScript, a bundler, native compilation).
+
+```dockerfile
+FROM node:22-slim AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:22-slim
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+CMD ["node", "dist/main.js"]
+```
+
+The first stage (`AS build`) installs *all* dependencies, including dev tooling, and produces your compiled output in `dist`. The second stage starts from a fresh base and copies only what the app needs to run at runtime: the built code and the production `node_modules`. Everything from the build stage that you don't copy forward (the TypeScript compiler, source maps, test files, caches) is simply discarded. The result is an image that contains the artifact and nothing that built it. For a stricter production image, install prod-only dependencies in the build stage with a separate `npm ci --omit=dev` into a clean directory and copy that, so even dev dependencies never cross into the final layer.
+
+## Step 3: Add a .dockerignore
+
+Keep node_modules and local junk out of the build context for faster, smaller builds. The build context is everything Docker uploads to the daemon before building, and a stray local `node_modules` can be hundreds of megabytes.
+
+```bash
+node_modules
+npm-debug.log
+.git
+.env
+dist
+```
+
+This file does double duty. It speeds up builds by shrinking the context Docker has to send, and it prevents accidents: ignoring `.env` means your local secrets never get copied into an image by a careless `COPY . .`, and ignoring `node_modules` guarantees the container uses the dependencies installed *inside* the image (for the correct platform) rather than whatever happened to be on your host machine. Treat `.dockerignore` as mandatory, not optional: it is the cheapest safety and speed win in the whole workflow.
+
+![Terminal showing docker build and run commands during a container session](https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&w=1200&q=80)
+
+## Step 4: Build and run
+
+Build the image, tagging it with a name, then run it with your port mapped and environment supplied.
+
+```dockerfile
+docker build -t my-node-app .
+docker run -p 3000:3000 --env-file .env my-node-app
+```
+
+`docker build -t my-node-app .` builds from the `Dockerfile` in the current directory (`.`) and tags the image `my-node-app`. `docker run -p 3000:3000` maps port 3000 on your host to port 3000 in the container; the format is always `host:container`, and forgetting this flag is the number-one reason "the server is running but I can't reach it." `--env-file .env` injects environment variables at *runtime*, which is exactly where secrets belong: never bake them into the image with `ENV` or `COPY`, because anyone who pulls the image can read every layer. To watch logs live add `-it`, or run detached with `-d` and inspect later with `docker logs`.
+
+## Production hardening
+
+A few additions turn this from "works" into "production-ready":
+
+- **Run as a non-root user.** The Node images ship a `node` user. Add `USER node` before your `CMD` so a container breakout doesn't hand an attacker root.
+- **Set `NODE_ENV=production`.** Add `ENV NODE_ENV=production` so Express and many libraries switch into their faster, leaner modes.
+- **Handle signals properly.** Use the exec form of `CMD` (`["node", "dist/main.js"]`, which we already do) so your process receives `SIGTERM` directly and can shut down gracefully. If you need a proper init to reap zombies, run with `docker run --init`.
+- **Add a healthcheck.** A `HEALTHCHECK` instruction lets your orchestrator know when the app is actually ready, not just started.
+
+## Common mistakes
+
+- **`COPY . .` before `npm ci`.** This destroys layer caching and makes every rebuild reinstall dependencies. Copy manifests first.
+- **Baking secrets into the image.** Anything in a layer is permanent and readable. Pass secrets at runtime via `--env-file` or your orchestrator's secret store.
+- **Shipping the full `node:22` image.** The full image is roughly a gigabyte; `slim` is a fraction of that. Smaller images pull faster, start faster, and have a smaller attack surface.
+- **Running as root.** The default. Switch to the `node` user for anything facing the internet.
+
+## Wrapping up
+
+Use multi-stage builds and a slim base to keep images small, add a `.dockerignore` to keep builds fast and secrets out, run as a non-root user, and never bake secrets into the image; pass them at runtime. Those few habits cover the large majority of what separates a toy Dockerfile from one you'd happily run in production. Once this is second nature, the same patterns carry straight over to Docker Compose for local multi-service setups and to Kubernetes manifests when you scale out.
+
+If you found this useful, [subscribe](/#subscribe) for more hands-on guides, or [reach out](/contact) with questions.

@@ -1,0 +1,128 @@
+---
+title: "Best Developer Tools for JavaScript"
+description: "The JavaScript tools that make 2026 productive: runtimes, package managers, bundlers, linters, and testing, curated for real projects."
+category: tools
+date: "2026-08-30"
+keywords: ["best developer tools for javascript","bun","vite","biome","vitest","pnpm"]
+---
+
+## Introduction
+
+The JavaScript toolchain moves fast. Every year brings a new runtime, a faster bundler, or a tool that collapses three dependencies into one. That churn is exhausting if you chase every release, but a handful of tools have earned a permanent place in a modern, fast, low-friction JS workflow, and knowing which ones are worth the switch saves you from both stagnation and shiny-object fatigue.
+
+This is a short list of tools I actually reach for on real projects, not benchmarks run in a vacuum, so the notes below cover where each one shines and where it'll still bite you.
+
+![Code editor open on a laptop showing a modern JavaScript project](https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1200&q=80)
+
+<AffDisclosure />
+
+## What to look for
+
+Before comparing names, get clear on your own priorities. The factors that matter most here:
+
+- **Fit for your stack:** the best tool is the one that matches how you already work. A tool that fights your framework or deploy target will cost you more than it saves.
+- **Pricing and value.** Weigh the real cost against the time it saves you. Most of these are free and open source; the real "cost" is migration effort and ecosystem maturity.
+- **Developer experience.** Good docs and a clean API compound every single day. Fast feedback loops (instant HMR, sub-second test runs) change how you work.
+- **Scalability.** Will it still fit when your project (or team) grows? A tool that's fast on a toy repo can stall on a large monorepo.
+- **Ecosystem fit.** Does it play nicely with the plugins, frameworks, and CI you already depend on?
+
+### How we compared
+
+Each tool was judged on four axes: raw speed (install times, cold start, HMR, test runs), ecosystem maturity (plugins, framework support, Stack Overflow answers when something breaks), migration cost from the incumbent it replaces, and how well it behaves in CI and on large codebases. The picks below each win decisively on at least one axis without being a liability on the others.
+
+## The top picks
+
+### Bun
+
+All-in-one runtime, bundler, test runner, and package manager, and it's very fast. Bun's pitch is consolidation: one binary replaces Node, npm, and a chunk of your tooling, with a native-speed installer and a built-in test runner. `bun install` is dramatically faster than npm, and running scripts has near-zero startup overhead. For greenfield projects and scripts, it's a joy.
+
+The caveat is Node compatibility: most things work, but some native modules and edge-case APIs still trip it up, so verify your critical dependencies before betting a production service on it. **Choose Bun when** you're starting fresh or want the fastest possible install and script execution and can tolerate occasional compatibility gaps.
+
+<AffBox id="bun" />
+
+### Vite
+
+The bundler/dev server standard, with instant HMR and a huge plugin ecosystem. Vite serves source over native ES modules in development (so startup doesn't degrade as your app grows) and bundles with Rollup for production. Nearly every modern framework ships a Vite integration, and the plugin ecosystem covers almost anything you'll need. It's the safe, high-performance default for front-end work.
+
+```bash
+npm create vite@latest my-app
+cd my-app && npm install && npm run dev
+```
+
+Very large apps can see slower cold starts as the module graph grows, which is exactly what newer Rust-based bundlers target, but for the overwhelming majority of projects, Vite is still the one to beat. **Choose Vite when** you want a battle-tested dev server with the widest plugin and framework support.
+
+<AffBox id="vite" />
+
+### Biome
+
+A single fast tool for linting and formatting, replacing ESLint + Prettier for many teams. Written in Rust, Biome lints and formats in a fraction of the time, from one config file, with no plugin soup to assemble. The reduction in moving parts alone is worth it: one dependency, one command, consistent output.
+
+The trade-off is rule coverage: ESLint's enormous plugin ecosystem still covers framework-specific and niche rules Biome hasn't matched yet. Check that your must-have rules exist before switching. **Choose Biome when** you want fast, zero-config linting and formatting and don't depend on exotic ESLint plugins.
+
+### Vitest
+
+Vite-native testing with a Jest-compatible API and great speed. If you're already on Vite, Vitest reuses your config and transform pipeline, so there's no second build setup to maintain. The API mirrors Jest closely enough that migration is mostly mechanical, watch mode is fast, and it handles TypeScript and ESM without ceremony.
+
+```ts
+import { expect, test } from 'vitest'
+import { sum } from './sum'
+
+test('adds numbers', () => {
+  expect(sum(2, 3)).toBe(5)
+})
+```
+
+Outside a Vite project the fit is less automatic, though it still works. **Choose Vitest when** you use Vite (or want a fast, modern Jest replacement) and value a shared config between app and tests.
+
+![Terminal showing fast test and build output in a JavaScript project](https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80)
+
+### pnpm
+
+Efficient, strict package manager that saves disk and prevents phantom dependencies. pnpm stores packages once in a global content-addressable store and hard-links them into each project, so disk usage and install times drop sharply, especially across many repos. Crucially, its strict, non-flat `node_modules` layout means you can only import what you actually declared, catching "phantom dependency" bugs that npm and Yarn silently allow.
+
+Its first-class workspace support makes it the go-to for monorepos. The strictness occasionally surprises packages that relied on hoisting, but that's usually a bug being exposed, not created. **Choose pnpm when** you want fast, disk-efficient installs and correctness guarantees, particularly in a monorepo.
+
+## Quick comparison
+
+| Pick | Why it stands out |
+| --- | --- |
+| **Bun** | All-in-one runtime, bundler, and package manager that's very fast. |
+| **Vite** | The bundler/dev server standard, with instant HMR and a huge plugin ecosystem. |
+| **Biome** | A single fast tool for linting and formatting, replacing ESLint + Prettier for many teams. |
+| **Vitest** | Vite-native testing with a Jest-compatible API and great speed. |
+| **pnpm** | Efficient, strict package manager that saves disk and prevents phantom dependencies. |
+
+## Who this is for
+
+Front-end and full-stack developers building apps should anchor on Vite + Vitest; the shared pipeline is a real productivity multiplier. Teams managing many packages want pnpm for its workspace handling and disk savings. Anyone tired of maintaining separate ESLint and Prettier configs should trial Biome. And developers starting new side projects or writing scripts should reach for Bun to feel how fast the whole loop can be.
+
+## Common mistakes
+
+- **Adopting everything at once.** Swap one tool at a time and confirm CI stays green before the next. A simultaneous five-tool migration is impossible to debug.
+- **Ignoring Node compatibility with Bun.** Test your real dependency tree, not a hello-world, before shipping a service on it.
+- **Mixing package managers.** Committing both a `package-lock.json` and a `pnpm-lock.yaml` leads to confusing, non-reproducible installs. Pick one and delete the others.
+- **Leaving ESLint and Biome both active.** Running two formatters produces fighting diffs. Choose one source of truth for formatting.
+
+## Migration tips
+
+Start with the package manager; moving to pnpm is low-risk and immediately pays off. Next, if you're on Create React App or Webpack, migrate to Vite; the dev-server speedup is the most noticeable single change you can make. Introduce Vitest alongside your existing tests and port them incrementally. Save Biome for last and run it against a branch to eyeball the formatting diff before committing the whole team.
+
+## Frequently asked questions
+
+**Which should I choose if I'm just starting out?**
+Start with the option that has the gentlest learning curve and best documentation. Vite plus Vitest is the most beginner-friendly, well-documented combination here. You can always switch once you understand your needs better.
+
+**Is the most popular option always the best?**
+No. Popularity means more tutorials and community help, but the *right* choice depends on your specific stack, budget, and goals. Vite is popular *and* an excellent default; Bun is less universal but unbeatable for certain workflows.
+
+**Can I use Bun just as a package manager?**
+Yes. `bun install` works even if you keep running your app on Node, which is a safe way to get the install speedup without committing to the runtime.
+
+**Do I still need ESLint if I use Biome?**
+Only if you depend on specific ESLint plugins Biome hasn't reimplemented. For many teams Biome covers the common rules; check your current config for anything exotic first.
+
+## Final verdict
+
+Pair Vite (or Bun) with Vitest and Biome for a modern JS stack that's fast to run and pleasant to maintain, and use pnpm as the package manager underneath it all. If you want maximum stability, Vite + Vitest + pnpm is the no-regrets choice; if you want to feel the bleeding edge of speed, lead with Bun and keep an eye on compatibility.
+
+*I update this as the toolchain shifts. Have a suggestion? [Get in touch](/contact).*

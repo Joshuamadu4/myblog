@@ -1,0 +1,87 @@
+---
+title: "How to Deploy Next.js to Vercel"
+description: "Deploy a Next.js app to Vercel in minutes: Git integration, environment variables, custom domains, and preview deployments explained."
+category: web-development
+date: "2026-09-09"
+keywords: ["how to deploy next.js to vercel"]
+---
+
+## Introduction
+
+Vercel is built by the Next.js team, so deploying is about as close to effortless as web deployment gets. There is no build server to configure, no CDN to wire up by hand, and no guessing which output directory to serve: the platform detects Next.js, applies the right build settings, and routes your pages, API routes, server components, and static assets across its edge network automatically. What would be a day of DevOps on a raw cloud becomes a five-minute connect-and-go.
+
+This guide walks the full path from a local repository to production on a custom domain, with HTTPS and automatic preview deployments along the way. We'll push the code to Git, import the project, configure environment variables correctly (the part people most often get wrong), and attach a domain. By the end you'll have a working setup you can drop straight into a real project, plus the context to understand what Vercel is doing on your behalf and how to debug it when something misbehaves.
+
+![Laptop on a desk showing a web application ready to deploy to the cloud](https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80)
+
+## Step 1: Push your app to Git
+
+Vercel deploys from GitHub, GitLab, or Bitbucket. The model is Git-driven: your repository is the source of truth, and every push becomes a deployment. Make sure your project is committed and pushed before you start.
+
+```bash
+git init
+git add .
+git commit -m "init"
+git push origin main
+```
+
+Two things to check before moving on. First, confirm your `.gitignore` excludes `node_modules`, `.next`, and any local `.env` files: you do not want build output or secrets in your history, and Vercel builds dependencies itself from your lockfile. Second, make sure the repository actually builds locally with `next build`; Vercel runs the same command, so a build that fails on your machine will fail there too. Fixing it locally first saves you a round-trip through the dashboard.
+
+## Step 2: Import the project
+
+In the Vercel dashboard choose **Add New → Project**, pick your repo, and it auto-detects Next.js. No build config needed; the framework preset fills everything in.
+
+```bash
+# Framework Preset: Next.js
+# Build Command:   next build (auto)
+# Output:          .next (auto)
+```
+
+You generally should not touch these. The one case where you do is a monorepo: if your Next.js app lives in a subdirectory (say `apps/web`), set the **Root Directory** to that folder during import so Vercel builds from the right place. Click deploy and the first build runs (install, build, and distribute) usually in a minute or two. When it finishes you get a live `*.vercel.app` URL immediately, before you've configured anything else. That URL is already production-grade, served over HTTPS from the edge.
+
+## Step 3: Add environment variables
+
+Set secrets in **Project Settings → Environment Variables**, scoped to Production, Preview, and Development independently. This scoping is the feature most people miss, and it is the source of most "it works in preview but breaks in prod" confusion.
+
+```bash
+DATABASE_URL=...
+NEXT_PUBLIC_SITE_URL=https://yourdomain.com
+```
+
+Understand the `NEXT_PUBLIC_` prefix before you add anything. Variables prefixed with `NEXT_PUBLIC_` are inlined into the client-side JavaScript bundle at build time and are therefore visible to anyone who opens dev tools, so use the prefix only for genuinely public values like a site URL or an analytics ID. Everything secret (database URLs, API keys, tokens) must go *without* the prefix so it stays server-side only. One more gotcha: because `NEXT_PUBLIC_` values are baked in at build time, changing one requires a **redeploy** to take effect; editing it in the dashboard is not enough on its own. Scope each variable deliberately: a preview database for Preview, the real one for Production.
+
+![Dashboard with charts and settings panels for configuring a deployment](https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80)
+
+## Step 4: Add a custom domain
+
+Under **Settings → Domains**, add your domain and point DNS at Vercel. Every push to `main` then redeploys production; every pull request gets its own preview URL.
+
+```bash
+# Add: yourdomain.com
+# Vercel issues HTTPS automatically
+```
+
+Vercel will tell you exactly which DNS records to create. For an apex domain (`yourdomain.com`) you'll typically add an `A` record pointing at Vercel's IP, or use Vercel's nameservers; for a subdomain like `www` you add a `CNAME`. Once DNS propagates, anywhere from a few minutes to a few hours depending on your registrar's TTL, Vercel provisions and renews a TLS certificate for you automatically, so HTTPS just works with nothing to manage. A common convention is to add both the apex and `www`, then set one as the canonical and let Vercel redirect the other to it.
+
+## Understanding preview deployments
+
+This is the feature you'll end up loving most. Every pull request automatically gets its own isolated deployment at a unique URL, built from that branch's code and that environment's variables. You can hand the link to a designer, a product manager, or a client and they see the exact change in a real, production-like environment, with no "let me set up the branch locally" friction. Merge the PR and the change flows to production; close it without merging and the preview simply goes away. Comments and visual review tools layer on top, turning the preview URL into the center of your review process.
+
+## Going further with the CLI
+
+The dashboard covers the full workflow, but the `vercel` CLI is worth installing for day-to-day speed. `vercel` from your project directory deploys a preview from your local code without a Git push; `vercel --prod` promotes to production; and `vercel env pull` downloads your configured environment variables into a local `.env` file so your dev environment matches production exactly. That last command alone resolves a lot of "why does it only break locally" confusion.
+
+## Common gotchas
+
+- **Forgetting to redeploy after changing a `NEXT_PUBLIC_` variable.** It is compiled into the bundle at build time, so the old value sticks until the next build.
+- **Putting a secret behind `NEXT_PUBLIC_`.** That ships it to every visitor's browser. Secrets go without the prefix.
+- **Wrong root directory in a monorepo.** If the build can't find your app, check that the Root Directory points at the correct subfolder.
+- **A build that passes locally but fails on Vercel.** Usually an uncommitted file, a dependency missing from `package.json`, or a case-sensitivity mismatch (Vercel's Linux builders are case-sensitive; macOS is not).
+- **Node version drift.** If your app needs a specific Node version, pin it with an `engines` field in `package.json` or the project's Node.js setting, so the builder matches your local runtime.
+- **Serverless function timeouts.** Long-running API routes can hit the plan's execution limit. For heavy work, move it to a background job or a queue rather than blocking the request.
+
+## Wrapping up
+
+Connect Git, set your env vars with the right scopes and prefixes, add a domain, and that's the whole path to production, most of it one-time setup. From there your workflow is simply to open pull requests and merge them: preview deployments give every change a shareable URL, and merges to `main` ship to production with HTTPS handled for you. It really is the feature you'll love most once you've used it on a team.
+
+If you found this useful, [subscribe](/#subscribe) for more hands-on guides, or [reach out](/contact) with questions.

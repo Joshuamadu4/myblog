@@ -1,0 +1,158 @@
+---
+title: "How to Deploy NestJS to AWS EC2"
+description: "A step-by-step guide to deploying a NestJS API to an AWS EC2 instance with PM2, Nginx, and HTTPS."
+category: backend
+date: "2026-09-08"
+keywords: ["how to deploy nestjs to aws ec2"]
+---
+
+## Introduction
+
+Deploying NestJS to EC2 gives you a full server you control for a predictable monthly cost. Here's the production path: build, process manager, reverse proxy, and TLS.
+
+By the end of this tutorial you'll have a working setup you can drop straight into a real project. We will go beyond the happy path and call out the places this process usually bites people: security group rules, the NODE_ENV trap, memory on tiny instances, and the certificate renewal you forget about until it expires on a Saturday.
+
+A quick note on when EC2 is the right call. Platforms like Render, Railway, Fly.io, or AWS App Runner will deploy a Nest app in minutes with less to maintain. EC2 earns its place when you want full control of the box: custom system packages, a long-running worker next to the API, SSH access for debugging, or simply a fixed, predictable cost that does not scale surprisingly with traffic. If that is you, read on.
+
+![AWS cloud server infrastructure for deploying a NestJS API](https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80)
+
+## Prerequisites
+
+Before you start, make sure you have an AWS account, a NestJS app that builds cleanly with `npm run build`, a domain name you can point at the server (needed for HTTPS), and an SSH key pair. Have your environment variables ready. You will set these on the server, and never commit them to the repo.
+
+## Step 1: Launch and connect to EC2
+
+Start an Ubuntu instance, open ports 22/80/443 in the security group, then SSH in.
+
+```bash
+ssh -i key.pem ubuntu@your-ec2-ip
+sudo apt update && sudo apt install -y nginx
+```
+
+Pick an instance size with intent. A `t3.micro` (1 GB RAM) is enough for a small API, but `npm run build` and `npm ci` are memory-hungry, and on 1 GB they can get killed by the OOM reaper mid-build. Two fixes: build locally or in CI and ship the `dist/` folder, or add a swap file so the build does not die:
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+**Gotchas:** In the security group, restrict port 22 (SSH) to your own IP, not `0.0.0.0/0`, because leaving SSH open to the world invites brute-force attempts within hours. Open 80 and 443 to everyone. Also `chmod 400 key.pem` on your local machine or SSH will refuse to use a key with loose permissions. Use the instance's Elastic IP, not the default public IP, so the address survives a reboot.
+
+## Step 2: Install Node and build the app
+
+Install Node, pull your code, install deps, and build.
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+git clone https://github.com/you/your-api.git
+cd your-api
+npm ci && npm run build
+```
+
+Use `npm ci` rather than `npm install` on a server, because it installs exactly what is in your lockfile, reproducibly and faster. After the build you want production dependencies only, so a common pattern is to build with dev dependencies present, then prune:
+
+```bash
+npm ci
+npm run build
+npm prune --production
+```
+
+**Gotchas:** NestJS needs devDependencies (TypeScript, the Nest CLI) to *build*, but not to *run*, so do not pass `--production` to the install that precedes the build or the build will fail. Set your environment variables now: create a `.env` the app reads, or export them. Crucially, set `NODE_ENV=production`; many libraries (and Nest itself) behave differently, and leaving it unset leaves you running development defaults in production. Confirm the Node version matches what you use locally, since a mismatch is a classic source of "works on my machine" bugs.
+
+## Step 3: Keep it alive with PM2
+
+PM2 restarts your API on crash and on server reboot.
+
+```bash
+sudo npm i -g pm2
+pm2 start dist/main.js --name api
+pm2 startup && pm2 save
+```
+
+`pm2 startup` prints a command you must copy and run. It registers a systemd service so PM2 (and your app) come back after a reboot. `pm2 save` snapshots the current process list so it is restored on boot. Without both, your API silently stays down after the next reboot.
+
+A few PM2 commands worth knowing:
+
+```bash
+pm2 logs api          # tail application logs
+pm2 restart api       # restart after a deploy
+pm2 monit             # live CPU/memory dashboard
+pm2 start dist/main.js -i max --name api   # cluster mode, one worker per CPU
+```
+
+**Gotchas:** On a single-core micro instance, cluster mode (`-i max`) buys you nothing and doubles memory use, so stick to one process until you size up. If the app crashes immediately, `pm2 logs api` almost always shows why (a missing env var or a port already in use). Make sure your Nest app reads the port from the environment (`process.env.PORT ?? 3000`) so it matches what Nginx proxies to.
+
+![Developer monitoring server logs and deployment status in a terminal](https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80)
+
+## Step 4: Reverse proxy with Nginx + HTTPS
+
+Proxy port 80 to your Nest app, then add a free TLS cert with Certbot.
+
+Create a site config at `/etc/nginx/sites-available/api` (note this is Nginx config, despite the earlier highlighting):
+
+```nginx
+server {
+  listen 80;
+  server_name api.example.com;
+  location / {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+Enable it, test the config, and reload:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/api /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Now add TLS with Certbot, which fetches and installs a free Let's Encrypt certificate and rewrites your Nginx config to redirect HTTP to HTTPS:
+
+```bash
+sudo apt install -y certbot python3-nginx
+sudo certbot --nginx -d api.example.com
+```
+
+**Gotchas:** Point your domain's A record at the Elastic IP and wait for DNS to propagate *before* running Certbot, which validates by reaching your domain over port 80 and will fail if DNS is not resolving yet. The `X-Forwarded-Proto` and `X-Forwarded-For` headers above matter: if your Nest app enforces HTTPS, reads the client IP for rate limiting, or sets secure cookies, it needs to trust the proxy. Enable that in Nest by calling `app.set('trust proxy', 1)` (Express adapter) or configuring it in `main.ts`. Certbot auto-renews via a systemd timer; verify it with `sudo certbot renew --dry-run` so you are not surprised in 90 days when the cert would otherwise expire.
+
+## Step 5: Automate the deploy (optional but worth it)
+
+Once it works by hand, script the repeatable part so future deploys are one command. A minimal deploy script on the server:
+
+```bash
+#!/usr/bin/env bash
+set -e
+cd /home/ubuntu/your-api
+git pull origin main
+npm ci
+npm run build
+npm prune --production
+pm2 restart api
+```
+
+From there, a GitHub Actions workflow can SSH in and run this on every push to `main`, giving you continuous deployment without any extra services. Store the SSH key and host as encrypted repository secrets, never in the workflow file.
+
+## Troubleshooting
+
+- **502 Bad Gateway from Nginx:** the Nest app is not running or not on the expected port. Check `pm2 logs api` and confirm the `proxy_pass` port matches.
+- **Build killed / out of memory:** add swap (Step 1) or build in CI and ship `dist/`.
+- **App down after reboot:** you skipped the command `pm2 startup` printed, or forgot `pm2 save`.
+- **Certbot fails:** DNS has not propagated, port 80 is blocked in the security group, or the `server_name` does not match the domain.
+- **Secure cookies not working:** set `trust proxy` so Nest honors `X-Forwarded-Proto`.
+
+## Wrapping up
+
+PM2 + Nginx + Certbot is the classic, reliable EC2 stack for NestJS. Automate the deploy with a GitHub Actions workflow once it works by hand. The setup is more moving parts than a managed platform, but the payoff is a server you fully understand and control, at a cost that does not surprise you. Lock down SSH, keep your packages patched with `sudo apt upgrade`, watch memory on small instances, and confirm certificate renewal works. Do those four things and this stack will run quietly for a long time.
+
+If you found this useful, [subscribe](/#subscribe) for more hands-on guides, or [reach out](/contact) with questions.

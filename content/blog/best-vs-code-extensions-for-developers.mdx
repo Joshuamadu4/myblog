@@ -1,0 +1,122 @@
+---
+title: "Best VS Code Extensions for Developers"
+description: "The VS Code extensions that actually earn their keep in 2026, for productivity, git, debugging, and a calmer editor."
+category: tools
+date: "2026-08-31"
+keywords: ["best vs code extensions for developers","gitlens","error lens","prettier / biome","eslint","path intellisense + auto rename tag"]
+---
+
+## Introduction
+
+A handful of well-chosen extensions turns VS Code from a good editor into a great one. The trap most developers fall into is the opposite: installing fifty extensions, watching startup crawl, and never noticing that half of them do nothing. The goal is a short, deliberate set that each pay for themselves every day, not a maxed-out marketplace. These are the ones worth installing on a fresh machine.
+
+Everything here is something I actually keep installed across machines, and I'll flag the configuration gotchas that make the difference between an extension helping and an extension nagging.
+
+![VS Code editor open with multiple panels on a developer's screen](https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80)
+
+<AffDisclosure />
+
+## What to look for
+
+Before comparing names, get clear on your own priorities. The factors that matter most here:
+
+- **Fit for your stack:** the best tool is the one that matches how you already work. A Python-heavy workflow weights different extensions than a React one.
+- **Pricing and value.** Weigh the real cost against the time it saves you. Most essentials are free; a few (like GitLens) gate advanced features behind a paid tier.
+- **Developer experience.** Good docs and a clean API compound every single day. An extension that's noisy or slow does more harm than good.
+- **Scalability.** Will it still fit when your project (or team) grows? Formatter and linter choices especially should be shared across the whole team.
+- **Performance cost.** Every extension adds startup time and memory. Keep the set lean and audit it periodically.
+
+### How we compared
+
+Each extension was judged on how much friction it removes per day, how well it behaves on large files and projects, whether its defaults are sane out of the box, and its performance overhead. The picks below clear a high bar: they earn their place for almost every developer, not just a niche.
+
+## The top picks
+
+### GitLens
+
+Supercharges Git: blame annotations, history, and powerful diff views inline. GitLens answers the question you ask a dozen times a day ("who wrote this line, when, and why?") without leaving the editor. Hover any line to see the commit, author, and message; open the file history to scrub through changes; and compare revisions side by side. For understanding unfamiliar code, nothing else comes close.
+
+The one thing to tune: the inline blame annotation on the current line can feel noisy at first. If it distracts you, dial it back in settings rather than uninstalling. Some advanced features now sit behind a paid tier, but the core that most people rely on remains free. **Choose GitLens when** you work in any shared repository and routinely need code archaeology.
+
+<AffBox id="gitlens" />
+
+### Error Lens
+
+Surfaces errors and warnings right on the line, so there's no more hunting the Problems panel. Error Lens takes the diagnostics your language server already produces and renders them inline, so a type error or lint warning appears next to the offending code in colour. The feedback loop tightens dramatically: you see and fix problems as you type instead of after a save-and-scan.
+
+On a file with many warnings it can get visually busy, so consider limiting it to errors and warnings (not hints/info) if the colour overwhelms you. **Choose Error Lens when** you want the fastest possible feedback on diagnostics and don't mind a more colourful editor.
+
+<AffBox id="error-lens" />
+
+### Prettier / Biome
+
+Consistent formatting on save across your whole team. Pick one formatter, enable format-on-save, and commit the config so everyone's editor produces identical output. That ends the endless whitespace-and-quote diffs that pollute pull requests. Prettier is the established, framework-agnostic choice; Biome is the faster, newer all-in-one that also lints. Either works; the key is that the *team* agrees on one.
+
+```json
+// .vscode/settings.json (commit this)
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode"
+}
+```
+
+The classic mistake is two formatters fighting over the same file; see Common mistakes below. **Choose this when** you work on a team or simply want to stop thinking about formatting ever again.
+
+![Developer configuring editor settings and extensions at a desk](https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&w=1200&q=80)
+
+### ESLint
+
+Catches bugs and enforces conventions as you type. The ESLint extension surfaces your project's lint rules inline and can auto-fix many of them on save. Beyond style, good rules catch real bugs (unused variables, unhandled promises, accidental globals) before they ever reach review. It reads your project's config, so it respects whatever conventions your team has already agreed.
+
+Pair it with a formatter carefully: let ESLint handle code-quality rules and the formatter handle layout, so they don't overlap. **Choose ESLint when** you want convention enforcement and bug-catching that travels with the repo.
+
+### Path Intellisense + Auto Rename Tag
+
+Small quality-of-life wins you'll miss when they're gone. Path Intellisense autocompletes filenames in imports and `src` attributes, so you stop typo-ing relative paths. Auto Rename Tag renames the matching HTML/JSX closing tag when you edit the opening one, a tiny thing that saves a surprising number of broken-markup moments. Neither is glamorous; both quietly remove friction all day.
+
+**Choose these when** you write a lot of markup or juggle many file imports, which is to say, most front-end developers.
+
+## Quick comparison
+
+| Pick | Why it stands out |
+| --- | --- |
+| **GitLens** | Supercharges Git: blame annotations, history, and powerful diff views inline. |
+| **Error Lens** | Surfaces errors and warnings right on the line, no more hunting the Problems panel. |
+| **Prettier / Biome** | Consistent formatting on save across your whole team. |
+| **ESLint** | Catches bugs and enforces conventions as you type. |
+| **Path Intellisense + Auto Rename Tag** | Small quality-of-life wins you'll miss when they're gone. |
+
+## Who this is for
+
+Front-end and full-stack JavaScript developers get value from every pick here. Backend and polyglot developers should still install GitLens and Error Lens, which are language-agnostic, and swap the formatter/linter for the equivalents in their language. Newcomers benefit most from Error Lens and a formatter, which shorten the learn-by-mistake loop. Teams should standardise the formatter and ESLint config in the repo so every machine behaves identically.
+
+## Common mistakes
+
+- **Two formatters fighting.** Running Prettier and Biome (or ESLint's formatting rules) simultaneously produces diffs that flip back and forth on every save. Pick one source of truth for layout.
+- **Not committing editor settings.** If `.vscode/settings.json` isn't in the repo, format-on-save works on your machine and nowhere else. Commit it.
+- **Extension overload.** Dozens of extensions slow startup and fragment behaviour. Audit the list quarterly and remove anything you can't justify.
+- **Ignoring workspace vs. user settings.** Project-specific config belongs in the workspace, not your global user settings, or it'll leak into every other project.
+
+## Performance notes
+
+Extensions are not free; each one adds to startup time and memory. Use the built-in **Developer: Startup Performance** command to see which extensions cost the most, and the Extension Bisect feature to hunt down one that's slowing the editor. The set above is deliberately small precisely because a lean install stays snappy. If VS Code feels sluggish, the cause is almost always too many extensions, not the editor itself.
+
+## Frequently asked questions
+
+**Which should I choose if I'm just starting out?**
+Start with the option that has the gentlest learning curve and best documentation. Error Lens and a formatter deliver the biggest immediate improvement with zero configuration. You can always add more once you understand your needs.
+
+**Is the most popular option always the best?**
+No. Popularity means more tutorials and community help, but the *right* choice depends on your specific stack, budget, and goals. A Prettier-vs-Biome decision, for instance, should hinge on your team, not download counts.
+
+**Will these slow down my editor?**
+This set is light. The usual culprit for a slow VS Code is a bloated extension list, so use Startup Performance to find offenders and prune aggressively.
+
+**Do I need both ESLint and a formatter?**
+Yes, they do different jobs: the formatter handles layout, ESLint handles code quality and bug-catching. Just configure them so they don't both try to format the same thing.
+
+## Final verdict
+
+Start with GitLens, Error Lens, and a formatter; they deliver the biggest day-one improvement to your editing experience. Add ESLint for convention enforcement and the small quality-of-life pair once those feel natural. Keep the list short, commit your workspace settings so the team shares them, and audit periodically to keep the editor fast.
+
+*I keep this current as extensions come and go. Have a suggestion? [Get in touch](/contact).*
