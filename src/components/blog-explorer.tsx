@@ -80,7 +80,7 @@ export function BlogExplorer({ posts }: { posts: PostMeta[] }) {
       {results.length > 0 ? (
         <div className="grid gap-3">
           {results.map((p) => (
-            <ArticleRow key={p.slug} post={p} />
+            <ArticleRow key={p.slug} post={p} animate={false} />
           ))}
         </div>
       ) : (

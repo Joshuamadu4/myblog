@@ -5,11 +5,23 @@ import { getCategory } from "@/lib/categories";
 import { Thumb } from "./thumb";
 import { Calendar, Clock, Bookmark } from "./icons";
 
-/** Horizontal list row that matches the blog listing in the design. */
-export function ArticleRow({ post }: { post: PostMeta }) {
+/**
+ * Horizontal list row that matches the blog listing in the design.
+ * `animate` opts into the GSAP scroll-reveal; set it to false for rows rendered
+ * dynamically on the client (e.g. filtered lists), since GSAP's one-time
+ * ScrollTrigger never sees nodes created after mount, which would leave them
+ * stuck at opacity:0.
+ */
+export function ArticleRow({
+  post,
+  animate = true,
+}: {
+  post: PostMeta;
+  animate?: boolean;
+}) {
   const cat = getCategory(post.category);
   return (
-    <article className="reveal group relative flex gap-4 rounded-2xl border border-line bg-white p-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[var(--shadow-card)] sm:gap-5 sm:p-4">
+    <article className={`${animate ? "reveal " : ""}group relative flex gap-4 rounded-2xl border border-line bg-white p-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[var(--shadow-card)] sm:gap-5 sm:p-4`}>
       <Link
         href={`/blog/${post.slug}`}
         className="shrink-0"
