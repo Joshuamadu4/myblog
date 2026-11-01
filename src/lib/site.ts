@@ -3,7 +3,7 @@ export const site = {
   tagline: "Practical Insights. Better Developers.",
   description:
     "Tutorials, tools, and real-world guides to help you build, deploy, and grow as a software engineer.",
-  url: "https://devinsights.dev",
+  url: "https://blog.joe4tech.com.ng",
   author: {
     name: "Joshua Madu",
     role: "Software Engineer & Technical Writer",
