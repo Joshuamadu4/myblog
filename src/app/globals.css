@@ -146,7 +146,12 @@
   color: var(--color-muted);
   font-style: italic;
 }
-.prose-article img { border-radius: var(--radius); }
+.prose-article img {
+  border-radius: var(--radius);
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
 .prose-article table {
   width: 100%;
   border-collapse: collapse;

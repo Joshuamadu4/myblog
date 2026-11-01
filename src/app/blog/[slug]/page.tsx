@@ -72,11 +72,20 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
     image: [`${site.url}/blog/${post.slug}/opengraph-image`],
     datePublished: post.date,
     dateModified: post.date,
-    author: { "@type": "Person", name: site.author.name, url: site.url },
+    author: {
+      "@type": "Person",
+      name: site.author.name,
+      url: site.url,
+      sameAs: [site.social.twitter, site.social.linkedin, site.social.github],
+    },
     publisher: {
       "@type": "Organization",
       name: site.name,
       url: site.url,
+      logo: {
+        "@type": "ImageObject",
+        url: `${site.url}/icon.svg`,
+      },
     },
     mainEntityOfPage: url,
     articleSection: cat?.name,
